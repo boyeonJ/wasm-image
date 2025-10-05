@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8" />
+<title>Rust WASM Image Filters</title>
+<style>
+    body { font-family: ui-sans-serif, system-ui; margin: 24px; }
+    .row { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+    canvas { border: 1px solid #e5e7eb; border-radius: 8px; }
+</style>
+<body>
+<div class="row">
+    <input id="file" type="file" accept="image/*" />
+    <button id="btn-gray" disabled>Grayscale</button>
+    <button id="btn-blur" disabled>Box Blur 3×3</button>
+</div>
+
+<div class="row">
+    <canvas id="canvas"></canvas>
+</div>
+
+<script type="module">
+    import init, { grayscale, box_blur3 } from "./pkg/core.js";
+    await init("./pkg/core_bg.wasm");
+
+    const fileInput = document.getElementById("file");
+    const btnGray   = document.getElementById("btn-gray");
+    const btnBlur   = document.getElementById("btn-blur");
+    const canvas    = document.getElementById("canvas");
+    const ctx       = canvas.getContext("2d");
+
+    let width = 0, height = 0;
+
+    fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const imgUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            width = img.naturalWidth;
+            height = img.naturalHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            ctx.drawImage(img, 0, 0);
+            btnGray.disabled = false;
+            btnBlur.disabled = false;
+            URL.revokeObjectURL(imgUrl);
+        };
+        img.src = imgUrl;
+    });
+
+    btnGray.addEventListener("click", () => {
+        const image = ctx.getImageData(0, 0, width, height);
+        // wasm-bindgen은 &[u8] 매개변수에 JS TypedArray를 바로 받을 수 있어요.
+        const out = grayscale(image.data);
+        const clamped = new Uint8ClampedArray(out);
+        ctx.putImageData(new ImageData(clamped, width, height), 0, 0);
+    });
+
+    btnBlur.addEventListener("click", () => {
+        const image = ctx.getImageData(0, 0, width, height);
+        const out = box_blur3(image.data, width, height);
+        const clamped = new Uint8ClampedArray(out);
+        ctx.putImageData(new ImageData(clamped, width, height), 0, 0);
+    });
+</script>
+</body>
+</html>
